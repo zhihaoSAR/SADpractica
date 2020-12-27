@@ -1,0 +1,22 @@
+{
+  "name": "sadpractica",
+  "version": "1.0.0",
+  "description": "SADpractica",
+  "main": "LoadBalancerCliFron.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhihaoSAR/SADpractica.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zhihaoSAR/SADpractica/issues"
+  },
+  "homepage": "https://github.com/zhihaoSAR/SADpractica#readme",
+  "dependencies": {
+    "zeromq": "^6.0.0-beta.6"
+  }
+}
