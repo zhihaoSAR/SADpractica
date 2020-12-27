@@ -1,8 +1,8 @@
 const http = require('http');
 var get = {
     host: 'localhost',
-    port: 8080,
-    path: '/',
+    port: 3040,
+    path: '/echo/holamundo',
     method: 'GET'
   };
 
