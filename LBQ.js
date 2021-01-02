@@ -1,25 +1,35 @@
 var zmq = require("zeromq")
 const router = new zmq.Router
-const joinPort = 3000
-const masterDir = "tcp://"+"127.0.0.1"
-const joinDir = masterDir + ":"+joinPort
+const dealer = new zmq.Dealer
 const joinRequest = new zmq.Request
-const myDir = "tcp://" +"127.0.0.1"+":3020"
+const JOINPORT = 3000
+const ROUTERPORT = 3020
+const DEALERPORT = 3021
+const MASTERDIR = "tcp://"+"127.0.0.1"
+const JOINDIR = MASTERDIR + ":"+JOINPORT
+const MYDIR = "tcp://" +"127.0.0.1"
 async function routeHandle(){
     for await (msg of router) {
       router.send(msg)
     }
   }
+async function dealerHandle(){
+    for await (msg of dealer) {
+        router.send(msg)
+      }
+}
 
 async function inicialize(){
-    await router.bind("tcp://*:3020")
+    await router.bind("tcp://*"+":" + ROUTERPORT)
+    await dealer.bind("tcp://*"+":" + DEALERPORT)
     routeHandle()
+    dealerHandle()
     process.on("SIGINT", () => {
-        joinRequest.send(["LBQExit",myDir]).then(process.exit())
+        joinRequest.send(["LBQExit",MYDIR]).then(process.exit())
     })
-    console.log("LBQ inicialized")
+    console.log("LBQ start")
 }
-joinRequest.connect(joinDir)
-joinRequest.send(["LBQJoin", myDir])
+joinRequest.connect(JOINDIR)
+joinRequest.send(["LBQJoin", MYDIR])
 joinRequest.receive().then(inicialize)
 

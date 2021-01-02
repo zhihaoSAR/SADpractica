@@ -6,6 +6,7 @@ const subscripber = new zmq.Subscriber
 //direccion de master deberia pasar por parametro
 const joinPort = 3000
 const subPort = 3001
+const LBQport = 3020
 const masterDir = "tcp://"+"127.0.0.1"
 const joinDir = masterDir + ":"+joinPort
 const subDir = masterDir + ":"+subPort
@@ -20,6 +21,7 @@ async function dealerHandle(){
   for await (msg of dealer){
     clientId = msg.shift()
     clients[clientId.toString()].send(msg.toString())
+    delete clients[clientId.toString()]
   }
 }
 async function subscriberHandle(){
@@ -30,8 +32,8 @@ async function subscriberHandle(){
 
 function connect2LBQ(list) {
   for(dir of list){
-    console.log("connecta a : " + dir)
-    dealer.connect(dir) 
+    console.log("connecta a : " + dir +":"+LBQport)
+    dealer.connect(dir +":"+LBQport) 
   }
 }
 
@@ -47,7 +49,7 @@ async function inicialize(list){
     dealer.send([clientId,req.params['method'],req.params['arg1']])
   })
   await app.listen(3040,() =>{
-    console.log("frontend inicialized")
+    console.log("frontend start")
   })
   await subscripber.connect(subDir)
   await subscripber.subscribe("LBQJoin")
