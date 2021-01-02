@@ -1,24 +1,65 @@
+
+
 // Master.js
-var zmq = require("zeromq"),
-	mDictionary = zmq.socket("rep");
+const fs = require("fs")
+const zmq = require("zeromq"),
+	mDictionary = new zmq.Router,
+	publisher = new zmq.Publisher
 //Direction Dictionary
 var dDictionary = {
-	["LBF"]: "tcp://127.0.0.1:3010",
-	["LBQ"]: "tcp://127.0.0.1:3020",
-	["QUEUE"]: "tcp://127.0.0.1:3030"
+	["LBF"]: [],
+	["LBQ"]: [],
+	["QUEUE"]: []
 };
 
-//We could initiate
-mDictionary.bind("tcp://127.0.0.1:3000");
-console.log("MASTER Start");
-
-mDictionary.on("message", function(obj) {
-	console.log(`Received Request: ${obj}`);
-    // Send the message back as a reply to the server.
-	const message = dDictionary[obj.toString("utf8")];
-	if (message == null) {
-		mDictionary.send("NaN");
-	} else {	
-		mDictionary.send(message);
+function frontednJoin(){
+	return JSON.stringify(dDictionary.LBQ)
+}
+function LBQJoin(msg){
+	const dir = msg[3].toString()
+	console.log("LBQ joined: " + dir)
+	dDictionary.LBQ.push(dir)
+	fs.writeFileSync(JSON.stringify(dDictionary))
+	publisher.send(["LBQJoin",JSON.stringify(dDictionary.LBQ)])
+	return "OK"
+}
+function LBQExit(msg) {
+	const dir = msg[3].toString()
+	const index = dDictionary.LBQ.indexOf(dir)
+	if(index != -1){
+		dDictionary.LBQ.splice(index,1)
 	}
+	fs.writeFileSync(JSON.stringify(dDictionary))
+	console.log("LBQ "+index +" "+ dir +" exit")
+}
+const functions = {
+	"FrontendJoin":frontednJoin,
+	"LBQJoin": LBQJoin,
+	"LBQExit": LBQExit
+}
+
+async function mDictionaryHandle(){
+	for await(msg of mDictionary){
+		mDictionary.send([msg[0],"",functions[msg[2].toString()](msg)])
+	}
+}
+
+
+//We could initiate
+if(fs.existsSync("dDictionary.json")){
+	dDictionary = JSON.parse(fs.readFileSync("dDictionary.json"))
+}
+mDictionary.bind("tcp://127.0.0.1:3000")
+.then(() => {
+	publisher.bind("tcp://127.0.0.1:3001")
+})
+.then(() => {
+	console.log("MASTER Start");
+	mDictionaryHandle()
 });
+
+
+
+
+
+
