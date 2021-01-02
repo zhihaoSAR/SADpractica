@@ -1,35 +1,31 @@
 //Queue
+const { json } = require("express");
 const zmq = require("zeromq"),
-	gIP = zmq.socket("req"); //Get IP socket
-gIP.connect("tcp://127.0.0.1:3000");
-console.log("Queue.js start");
+	//Get IP socket
+	gIP = new zmq.Request
 
-const LBQDealer = zmq.socket(`dealer`);    // Create PULL socket
+//mPORT = IP Master
+//sPORT = Self IP
+const mPORT = "tcp://127.0.0.1:3000",
+	sPORT = "tcp://127.0.0.1:3030";
 
-//The Init and gIP socket it's replicable to all components who needs get another IP
-gIP.on('message', function(msg) {
-	console.log(`Message received: ${msg}`);
-	let IP = msg.toString("utf8");
-	if (IP != "NaN") {
-		connectToLBQ(IP)
-		//gIP.close()
-	}
-});
+const LBQDealer = new zmq.Dealer;    // Create PULL socket
+var IpLBQ;
 
-var counter = 0;
-function init() {
+async function init() {
+	console.log("Queue.js start");
 	const msg = `LBQ`;
 	console.log(`Request ${msg} IP`);
 	gIP.send(msg);
+	IpLBQ = (await gIP.receive()).toString()
+	connectToLBQ(IpLBQ)
 }
 
-function connectToLBQ(IP) {
-	console.log("Connect to LBQ IP: ", IP);
-	LBQDealer.bind(IP, function (msg) {
-			
-	});
+async function connectToLBQ(IP) {
+	console.log("Connect to LBQ IP: "+IP.substr(1,IP.length-2));
+	LBQDealer.connect(IP.substr(1,IP.length-2));
+	
+	LBQDealer.send("SIGINT");
 }
-
 
 init();
-
