@@ -19,7 +19,7 @@ function LBQJoin(msg){
 	const dir = msg[3].toString()
 	console.log("LBQ joined: " + dir)
 	dDictionary.LBQ.push(dir)
-	fs.writeFileSync(JSON.stringify(dDictionary))
+	fs.writeFileSync("dDictionary.json", JSON.stringify(dDictionary))
 	publisher.send(["LBQJoin",JSON.stringify(dDictionary.LBQ)])
 	return "OK"
 }
@@ -29,7 +29,7 @@ function LBQExit(msg) {
 	if(index != -1){
 		dDictionary.LBQ.splice(index,1)
 	}
-	fs.writeFileSync(JSON.stringify(dDictionary))
+	fs.writeFileSync("dDictionary.json", JSON.stringify(dDictionary))
 	console.log("LBQ "+index +" "+ dir +" exit")
 }
 const functions = {
@@ -44,10 +44,12 @@ async function mDictionaryHandle(){
 	}
 }
 
-
 //We could initiate
 if(fs.existsSync("dDictionary.json")){
 	dDictionary = JSON.parse(fs.readFileSync("dDictionary.json"))
+	for(var k in dDictionary) {
+		console.log("Name: ", k, " IP: ", dDictionary[k]);
+	}
 }
 mDictionary.bind("tcp://127.0.0.1:3000")
 .then(() => {
