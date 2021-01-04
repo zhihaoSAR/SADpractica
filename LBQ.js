@@ -10,11 +10,13 @@ const JOINDIR = MASTERDIR + ":"+JOINPORT
 const MYDIR = "tcp://" +"127.0.0.1"
 async function routeHandle(){
     for await (msg of router) {
-      router.send(msg)
+      console.log(msg.toString())
+      dealer.send(msg)
     }
   }
 async function dealerHandle(){
     for await (msg of dealer) {
+        console.log("res: "+ msg.toString())
         router.send(msg)
       }
 }
@@ -25,7 +27,7 @@ async function inicialize(){
     routeHandle()
     dealerHandle()
     process.on("SIGINT", () => {
-        joinRequest.send(["LBQExit",MYDIR]).then(process.exit())
+        joinRequest.send(["LBQExit",MYDIR]).then(process.exit)
     })
     console.log("LBQ start")
 }

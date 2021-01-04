@@ -1,6 +1,7 @@
 
 
 // Master.js
+const { dir } = require("console")
 const fs = require("fs")
 const zmq = require("zeromq"),
 	mDictionary = new zmq.Router,
@@ -8,43 +9,91 @@ const zmq = require("zeromq"),
 const masterPort = 3000
 const pubPort = 3001
 const masterDir = "127.0.0.1"
+const UPDATE_LIST_TIME = 10000
 //Direction Dictionary
 var dDictionary = {
-	["LBF"]: [],
-	["LBQ"]: [[],[]],
-	["QUEUE"]: [[],[]],
-	numQueues: [],
-	numMax: 0,
+	["LBQ"]: {},
+	["QUEUE"]: {},
 	numReplica: 0,
 	numOriginal: 0
 };
 
+function queueJoin(msg){
+	let state
+	console.log("Queue: "+ msg[3].toString() +" want to join")
+	if(dDictionary.numReplica < dDictionary.numOriginal){
+		state = "REPLICA"
+		let dir = null
+		dDictionary.numReplica++
+		for(key in dDictionary.QUEUE){
+			if(!dDictionary.QUEUE[key]){
+				dir = key
+				break
+			}  
+		}
+		dDictionary.QUEUE[dir] = msg[3].toString()
+		fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
+		return JSON.stringify([state,dir])
+	}
+	else {
+		state = "ORIGINAL"
+		let dir = null
+		let numQueues = 99999999
+		for(key in dDictionary.LBQ){
+			if(numQueues > dDictionary.LBQ[key]){
+				numQueues = dDictionary.LBQ[key]
+				dir = key
+			}  
+		}
+		if(dir){
+			dDictionary.numOriginal++
+			if(dDictionary.numMax < ++dDictionary.LBQ[dir]){
+				dDictionary.numMax = dDictionary.LBQ[dir]
+			}
+			
+			dDictionary.QUEUE[msg[3].toString()] = null
+			fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
+			return JSON.stringify([state,dir])
+		}
+		return JSON.stringify(["REPEAT"])
+	}
+}
+
 function frontednJoin(){
-	return JSON.stringify(dDictionary.LBQ[0])
+	return JSON.stringify(Object.keys(dDictionary.LBQ))
 }
 function LBQJoin(msg){
 	const dir = msg[3].toString()
 	console.log("LBQ joined: " + dir)
-	dDictionary.LBQ[0].push(dir)
-	dDictionary.LBQ[1].push(0)
+	dDictionary.LBQ[dir] = 0
 	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
-	publisher.send(["LBQJoin",JSON.stringify(dDictionary.LBQ)])
+	publisher.send(["LBQJoin",JSON.stringify(Object.keys(dDictionary.LBQ))])
 	return "OK"
 }
 function LBQExit(msg) {
 	const dir = msg[3].toString()
-	const index = dDictionary.LBQ[0].indexOf(dir)
-	if(index != -1){
-		dDictionary.LBQ[0].splice(index,1)
-		dDictionary.LBQ[1].splice(index,1)
-	}
+	delete dDictionary.LBQ[dir]
 	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
-	console.log("LBQ "+index +" "+ dir +" exit")
+	console.log("LBQ "+ dir +" exit")
+}
+function queueExit(msg) {
+	const LBQDir = msg[5].toString()
+	const queueDir = msg[3].toString()
+	dDictionary.LBQ[LBQDir]--
+	delete dDictionary.QUEUE[queueDir]
+	dDictionary.numOriginal--
+	console.log("Queue "+msg[4].toString() +" "+queueDir+" exit")
+}
+function workerReport(){
+
 }
 const functions = {
 	"FrontendJoin":frontednJoin,
 	"LBQJoin": LBQJoin,
-	"LBQExit": LBQExit
+	"LBQExit": LBQExit,
+	"QueueJoin": queueJoin,
+	"QueueExit": queueExit,
+	"WorkerReport": workerReport
 }
 
 async function mDictionaryHandle(){
@@ -65,6 +114,10 @@ mDictionary.bind("tcp://"+masterDir+":"+masterPort)
 .then(() => {
 	console.log("MASTER Start");
 	mDictionaryHandle()
+	setInterval(() => {
+		console.log("send list")
+		publisher.send(["QUEUELIST",JSON.stringify(dDictionary.QUEUE)])
+	}, UPDATE_LIST_TIME);
 });
 
 
