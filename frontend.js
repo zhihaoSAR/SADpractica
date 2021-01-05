@@ -4,11 +4,12 @@ const joinRequest = new zmq.Request
 const dealer = new zmq.Dealer
 const subscripber = new zmq.Subscriber
 //direccion de master deberia pasar por parametro
-const joinPort = 3000
-const subPort = 3001
+const JOINPORT = 3000
+const SUBPORT = 3001
+const LBQPORT = 3020
 const masterDir = "tcp://"+"127.0.0.1"
-const joinDir = masterDir + ":"+joinPort
-const subDir = masterDir + ":"+subPort
+const joinDir = masterDir + ":"+JOINPORT
+const subDir = masterDir + ":"+SUBPORT
 //const myDir = "tcp://"+"127.0.0.1"+":3040"
 var clients = []
 
@@ -19,7 +20,8 @@ function generateId() {
 async function dealerHandle(){
   for await (msg of dealer){
     clientId = msg.shift()
-    clients[clientId.toString()].send(msg.toString())
+    await clients[clientId.toString()].send(msg.toString())
+    delete clients[clientId.toString()]
   }
 }
 async function subscriberHandle(){
@@ -30,12 +32,13 @@ async function subscriberHandle(){
 
 function connect2LBQ(list) {
   for(dir of list){
-    console.log("connecta a : " + dir)
-    dealer.connect(dir) 
+    console.log("connecta a : " + dir +":"+LBQPORT)
+    dealer.connect(dir +":"+LBQPORT) 
   }
 }
 
 async function inicialize(list){
+  console.log(list.toString())
   connect2LBQ(JSON.parse(list))
   app.get('/:method/:arg1', (req, res) => {
     clientId = generateId()
@@ -44,10 +47,10 @@ async function inicialize(list){
     }
     clients[clientId.toString()] = res
     console.log("request received, metodo: " + req.params['method'] +", parametros: "+ req.params['arg1'] )
-    dealer.send([clientId,req.params['method'],req.params['arg1']])
+    dealer.send([clientId,req.params['method'],JSON.stringify([req.params['arg1']])])
   })
   await app.listen(3040,() =>{
-    console.log("frontend inicialized")
+    console.log("frontend start")
   })
   await subscripber.connect(subDir)
   await subscripber.subscribe("LBQJoin")
