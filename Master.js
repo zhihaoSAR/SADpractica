@@ -14,6 +14,7 @@ const UPDATE_LIST_TIME = 10000
 var dDictionary = {
 	["LBQ"]: {},
 	["QUEUE"]: {},
+	ORIGINALQUEUE:{},
 	numReplica: 0,
 	numOriginal: 0
 };
@@ -26,7 +27,7 @@ function queueJoin(msg){
 		let dir = null
 		dDictionary.numReplica++
 		for(key in dDictionary.QUEUE){
-			if(!dDictionary.QUEUE[key]){
+			if(dDictionary.QUEUE[key] === "no replica"){
 				dir = key
 				break
 			}  
@@ -37,28 +38,29 @@ function queueJoin(msg){
 	}
 	else {
 		state = "ORIGINAL"
-		let dir = null
-		let numQueues = 99999999
-		for(key in dDictionary.LBQ){
-			if(numQueues > dDictionary.LBQ[key]){
-				numQueues = dDictionary.LBQ[key]
-				dir = key
-			}  
-		}
+		let dir = searchLBQ()
 		if(dir){
 			dDictionary.numOriginal++
-			if(dDictionary.numMax < ++dDictionary.LBQ[dir]){
-				dDictionary.numMax = dDictionary.LBQ[dir]
-			}
-			
-			dDictionary.QUEUE[msg[3].toString()] = null
+			dDictionary.LBQ[dir]++
+			dDictionary.QUEUE[msg[3].toString()] = "no replica"
+			dDictionary.ORIGINALQUEUE[msg[3].toString()] = dir
 			fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
 			return JSON.stringify([state,dir])
 		}
 		return JSON.stringify(["REPEAT"])
 	}
 }
-
+function searchLBQ(){
+	let numQueues = 99999999
+	let dir = null
+	for(key in dDictionary.LBQ){
+		if(numQueues > dDictionary.LBQ[key]){
+			numQueues = dDictionary.LBQ[key]
+			dir = key
+		}  
+	}
+	return dir
+}
 function frontednJoin(){
 	return JSON.stringify(Object.keys(dDictionary.LBQ))
 }
@@ -76,13 +78,63 @@ function LBQExit(msg) {
 	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
 	console.log("LBQ "+ dir +" exit")
 }
+
 function queueExit(msg) {
-	const LBQDir = msg[5].toString()
-	const queueDir = msg[3].toString()
-	dDictionary.LBQ[LBQDir]--
-	delete dDictionary.QUEUE[queueDir]
-	dDictionary.numOriginal--
+	const queueDir = msg[4].toString()
+	const queueState = msg[3].toString()
+	if(queueState === "ORIGINAL")
+	{
+		removeOriginalQueue(queueDir)
+	}
+	else{
+		dDictionary.QUEUE[LBQorSyncDir] = null
+		dDictionary.numReplica--
+	}
 	console.log("Queue "+msg[4].toString() +" "+queueDir+" exit")
+}
+function soliciteNewLBQ(msg){
+	const deadLBQ = msg[3].toString()
+	const queueDir = msg[4].toString()
+	delete dDictionary.LBQ[deadLBQ]
+	let newDir = searchLBQ()
+	dDictionary.ORIGINALQUEUE[queueDir] = newDir
+	if(newDir){
+		dDictionary.LBQ[newDir]++
+		return JSON.stringify(["NEW LBQ",newDir])
+	}
+	else{
+		return JSON.stringify(["NO LBQ"])
+	}
+}
+function deadQueue(msg){
+	const queueDir = msg[4].toString()
+	removeOriginalQueue(queueDir)
+	return queueJoin(msg)
+}
+function removeOriginalQueue(queueDir){
+	const lbqDir = dDictionary.ORIGINALQUEUE[queueDir]
+	if(lbqDir){
+		if(dDictionary.LBQ[lbqDir])
+			dDictionary.LBQ[lbqDir]--
+	}
+	const replica = dDictionary.QUEUE[queueDir]
+	if(replica && replica !== "no replica"){
+		dDictionary.numReplica--
+	}
+	delete dDictionary.QUEUE[queueDir]
+	delete dDictionary.ORIGINALQUEUE[queueDir]
+	if(replica)
+		dDictionary.numOriginal--
+}
+function becomeOriginal(msg){
+	const originalDir = msg[4].toString()
+	removeOriginalQueue(originalDir)
+	const queueDir = msg[3].toString()
+	const lbqDir = msg[5].toString()
+	dDictionary.ORIGINALQUEUE[queueDir] = lbqDir
+	dDictionary.LBQ[lbqDir]++
+	dDictionary.QUEUE[queueDir] = "no replica"
+	return
 }
 function workerReport(){
 
@@ -93,7 +145,10 @@ const functions = {
 	"LBQExit": LBQExit,
 	"QueueJoin": queueJoin,
 	"QueueExit": queueExit,
-	"WorkerReport": workerReport
+	"WorkerReport": workerReport,
+	"SoliciteNewLBQ": soliciteNewLBQ,
+	"DeadQueue": deadQueue,
+	"BecomeOriginal": becomeOriginal
 }
 
 async function mDictionaryHandle(){

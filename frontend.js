@@ -20,7 +20,7 @@ function generateId() {
 async function dealerHandle(){
   for await (msg of dealer){
     clientId = msg.shift()
-    clients[clientId.toString()].send(msg.toString())
+    await clients[clientId.toString()].send(msg.toString())
     delete clients[clientId.toString()]
   }
 }
