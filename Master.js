@@ -1,7 +1,6 @@
 
 
 // Master.js
-const { dir } = require("console")
 const fs = require("fs")
 const zmq = require("zeromq"),
 	mDictionary = new zmq.Router,
@@ -16,7 +15,8 @@ var dDictionary = {
 	["QUEUE"]: {},
 	ORIGINALQUEUE:{},
 	numReplica: 0,
-	numOriginal: 0
+	numOriginal: 0,
+	
 };
 
 function queueJoin(msg){
@@ -62,6 +62,7 @@ function searchLBQ(){
 	return dir
 }
 function frontednJoin(){
+	console.log("frontend joined")
 	return JSON.stringify(Object.keys(dDictionary.LBQ))
 }
 function LBQJoin(msg){
@@ -90,6 +91,7 @@ function queueExit(msg) {
 		dDictionary.QUEUE[LBQorSyncDir] = null
 		dDictionary.numReplica--
 	}
+	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
 	console.log("Queue "+msg[4].toString() +" "+queueDir+" exit")
 }
 function soliciteNewLBQ(msg){
@@ -98,8 +100,10 @@ function soliciteNewLBQ(msg){
 	delete dDictionary.LBQ[deadLBQ]
 	let newDir = searchLBQ()
 	dDictionary.ORIGINALQUEUE[queueDir] = newDir
+	console.log("LBQ: "+deadLBQ +" dead, " + queueDir + "solicite new LBQ")
 	if(newDir){
 		dDictionary.LBQ[newDir]++
+		fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
 		return JSON.stringify(["NEW LBQ",newDir])
 	}
 	else{
@@ -109,6 +113,8 @@ function soliciteNewLBQ(msg){
 function deadQueue(msg){
 	const queueDir = msg[4].toString()
 	removeOriginalQueue(queueDir)
+	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
+	console.log("try delete queue " + queueDir)
 	return queueJoin(msg)
 }
 function removeOriginalQueue(queueDir){
@@ -134,10 +140,16 @@ function becomeOriginal(msg){
 	dDictionary.ORIGINALQUEUE[queueDir] = lbqDir
 	dDictionary.LBQ[lbqDir]++
 	dDictionary.QUEUE[queueDir] = "no replica"
+	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
+	console.log(queueDir +  " become ORIGINAL")
 	return
 }
-function workerReport(){
-
+function workerReport(msg){
+	const queueDir = msg[3].toString()
+	removeOriginalQueue(queueDir)
+	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
+	console.log("try delete queue " + queueDir)
+	return "OK"
 }
 const functions = {
 	"FrontendJoin":frontednJoin,

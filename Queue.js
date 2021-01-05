@@ -48,9 +48,7 @@ async function sendRes(){
 
 async function LBQDealerHandle(){
     for await (msg of LBQDealer) {
-		msg.map((content) =>{
-			console.log(content.toString())
-		})
+		console.log("request from LBQ: "+ msg.toString())
 		pendingList.push(msg)
     }
 }
@@ -89,7 +87,6 @@ async function syncHandle() {
 async function queueRouterHandle(){
     for await (msg of queueRouter) {
 		const action = msg[2].toString()
-		console.log("action : "+ msg.toString())
 		if(state === "REPLICA"){
 			queueRouter.send([msg[0],"","NO WORK"])
 			continue
@@ -110,7 +107,6 @@ async function queueRouterHandle(){
 			if(syncStart){
 				syncDealer.send(["shift", msg[0]])
 			}
-			console.log("sending")
 			queueRouter.send([msg[0],"","WORK"].concat(work))
 			continue
 		}
@@ -142,7 +138,6 @@ async function queueRouterHandle(){
 			queueRouter.send([msg[0],"","THANKS"])
 			const id = msg[0]
 			msg.splice(0,3)
-			console.log("res: "+  msg)
 			if(syncStart){
 				syncDealer.send(["res",id,msg])
 			}
