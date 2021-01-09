@@ -1,0 +1,46 @@
+version: '3'
+
+services:
+    master:
+        build: ./app_master
+        ports:
+            - "3000:3000"
+            - "3001:3001"
+    queue:
+        build: ./app_queue
+        ports:
+            - "3030:3030"
+            - "3031:3031"
+        depends_on:
+            - master
+    frontend:
+        build: ./app_frontend
+        ports:
+            - "3040:3040"
+        networks: 
+            - client_Fr
+        depends_on:
+            - master
+    lbq:
+        build: ./app_lbq
+        ports:
+            - "3020:3020"
+            - "3021"
+            - "3022"
+        depends_on:
+            - master
+    worker:
+        build: ./app_worker
+        networks: 
+            - client_Fr
+        depends_on:
+            - master
+    client:
+        build: ./app_client
+        depends_on:
+            - frontend
+networks:
+    client_Fr:
+        driver: bridge
+        external: true
+    
