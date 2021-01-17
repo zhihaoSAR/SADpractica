@@ -109,6 +109,7 @@ function soliciteNewLBQ(msg){
 		return JSON.stringify(["NO LBQ"])
 	}
 }
+
 function deadQueue(msg){
 	const queueDir = msg[4].toString()
 	removeOriginalQueue(queueDir)

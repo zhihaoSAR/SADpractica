@@ -6,13 +6,6 @@ services:
         ports:
             - "3000:3000"
             - "3001:3001"
-    queue:
-        build: ./app_queue
-        ports:
-            - "3030:3030"
-            - "3031:3031"
-        depends_on:
-            - master
     frontend:
         build: ./app_frontend
         ports:
@@ -24,17 +17,25 @@ services:
     lbq:
         build: ./app_lbq
         ports:
+            - "3000"
             - "3020:3020"
-            - "3021"
-            - "3022"
+            - "3021:3021"
+            - "3022:3022"
         depends_on:
             - master
+    queue:
+        build: ./app_queue
+        ports:
+            - "3030"
+            - "3031"
+        depends_on:
+            - lbq
     worker:
         build: ./app_worker
         networks: 
             - client_Fr
         depends_on:
-            - master
+            - queue
     client:
         build: ./app_client
         depends_on:

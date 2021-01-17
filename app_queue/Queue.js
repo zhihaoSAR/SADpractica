@@ -1,4 +1,3 @@
-//Queue
 const { connect } = require("http2")
 var zmq = require("zeromq")
 var sha1 = require('crypto').createHash('sha1')
@@ -27,8 +26,6 @@ const workingDict = []
 var LBQDir = null
 var SYNCDIR = null
 
-//<<<<<<< Updated upstream
-
 LBQDealer.immediate = true
 LBQDealer.reconnectInterval = -1
 //syncDealer.receiveTimeout = 3000
@@ -46,14 +43,6 @@ async function sendRes(){
 		}
 		setTimeout(sendRes)
 	}
-}
-async function init() {
-	gIP.connect(mPORT)
-	console.log("Queue.js start");
-	gIP.send("LBQJoin");
-	console.log(`Request LBQ IP`);
-	IpLBQ = (await gIP.receive()).toString()
-	connectToLBQ(IpLBQ)
 }
 
 async function LBQDealerHandle(){
@@ -96,6 +85,9 @@ async function syncHandle() {
 }
 async function queueRouterHandle(){
     for await (msg of queueRouter) {
+		for(let i = 0; i < msg.length; ++i) {
+			console.log("queueRouterHandle ", msg[i].toString())
+		}
 		const action = msg[2].toString()
 		if(state === "REPLICA"){
 			queueRouter.send([msg[0],"","NO WORK"])
@@ -166,14 +158,16 @@ async function connect2LBQ(dir){
 		check.linger = 0
 		try{
 			if(LBQDir == null){
-				throw new Error("no lbq")
+				//throw new Error("no lbq")
+				console.log("New Error, No LBQ");
 			}
+			console.log("LBQDIR: ", LBQDir+":"+ LBQLIFECHECKPORT)
 			await check.connect(LBQDir+":"+ LBQLIFECHECKPORT)
 			await check.send("ARE YOU ACTIVE")
 			await check.receive()
-		}
-		catch(e){
-			check.close()
+		} catch(e){
+			await check.close()
+			console.log("Solicited New LBQ")
 			await joinRequest.send(["SoliciteNewLBQ", LBQDir,MYDIR])
 			let msg = await joinRequest.receive()
 			let res = JSON.parse(msg.toString())
@@ -186,10 +180,15 @@ async function connect2LBQ(dir){
 			continue
 		}
 		success = true
-		check.close()
+		await check.close()
 	}
-	await LBQDealer.connect(LBQDir + ":" +LBQPORT)
-	pause = false
+	
+	if (LBQDir != null) {
+		await LBQDealer.connect(LBQDir + ":" +LBQPORT)
+		pause = false
+	}
+	console.log("Finished connect2LBQ of: ", LBQDir, ", Original: ", dir)
+	
 	return
 }
 function syncDisconnect(){
@@ -208,14 +207,19 @@ function syncDisconnect(){
 			}
 			workingDict = {}
 			await queueRouter.bind(HEARDIR+":"+QUEUEPORT)
+			
+			/*
 			await syncDealer.bind(HEARDIR + ":" + SYNCPORT)
 			await connect2LBQ(LBQDir)
+			
 			LBQDealerHandle()
 			LBQDealer.events.on("disconnect",() => {
 				pause = true
-				connect2LBQ(LBQDir)
+				//connect2LBQ(LBQDir)
+				console.log("Try 2 Connect2LBQ of ", LBQDir)
 			})
 			queueRouterHandle()
+			*/
 			console.log("Queue becomme ORIGINAL")
 		}
 	})
@@ -230,19 +234,22 @@ async function inicialize(msg){
     if(state === "ORIGINAL"){
 		console.log("original")
 		await connect2LBQ()
-		await queueRouter.bind(MYDIR+":"+QUEUEPORT)
-		await syncDealer.bind(MYDIR + ":" + SYNCPORT)
+		await queueRouter.bind(HEARDIR+":"+QUEUEPORT)
+		await syncDealer.bind(HEARDIR + ":" + SYNCPORT)
 		LBQDealerHandle()
 		LBQDealer.events.on("disconnect",() => {
 			pause = true
 			connect2LBQ(LBQDir)
 		})
-		queueRouterHandle()
+		
+		
+		await queueRouterHandle()
 		syncHandle()
 		syncDisconnect()
 		console.log("Queue Start as ORIGINAL")
 	}
 	else if(state === "REPLICA"){
+		console.log("Dirección LBQ:" +LBQDir)
 		console.log("replica")
 		SYNCDIR = res[1]
 		try{
@@ -263,10 +270,11 @@ async function inicialize(msg){
 				syncStart = true
 			}
 			else{
+				console.log("Exit")
 				process.exit()
 			}
-		}
-		catch(err) {
+		} catch(err) {
+			console.log("Error: ",err);
 			await joinRequest.send(["DeadQueue",MYDIR, SYNCDIR])
 			syncDealer.receiveTimeout = -1
 			return joinRequest.receive().then(inicialize)
@@ -281,6 +289,7 @@ async function inicialize(msg){
 		setTimeout(join,5000)
 		return
 	}
+	console.log("Finished FirstInstance");
 }
 function join(){
 	joinRequest.connect(JOINDIR)
