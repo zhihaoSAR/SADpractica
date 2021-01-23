@@ -158,8 +158,7 @@ async function connect2LBQ(dir){
 		check.linger = 0
 		try{
 			if(LBQDir == null){
-				//throw new Error("no lbq")
-				console.log("New Error, No LBQ");
+				throw new Error("no lbq")
 			}
 			console.log("LBQDIR: ", LBQDir+":"+ LBQLIFECHECKPORT)
 			await check.connect(LBQDir+":"+ LBQLIFECHECKPORT)
@@ -191,6 +190,7 @@ async function connect2LBQ(dir){
 	
 	return
 }
+
 function syncDisconnect(){
 	syncDealer.events.on("disconnect", async () =>{
 		if(state ==="ORIGINAL"){
@@ -207,19 +207,18 @@ function syncDisconnect(){
 			}
 			workingDict = {}
 			await queueRouter.bind(HEARDIR+":"+QUEUEPORT)
-			
-			/*
+
 			await syncDealer.bind(HEARDIR + ":" + SYNCPORT)
 			await connect2LBQ(LBQDir)
 			
 			LBQDealerHandle()
 			LBQDealer.events.on("disconnect",() => {
 				pause = true
-				//connect2LBQ(LBQDir)
+				connect2LBQ(LBQDir)
 				console.log("Try 2 Connect2LBQ of ", LBQDir)
 			})
 			queueRouterHandle()
-			*/
+		
 			console.log("Queue becomme ORIGINAL")
 		}
 	})
@@ -233,7 +232,7 @@ async function inicialize(msg){
 	console.log(res)
     if(state === "ORIGINAL"){
 		console.log("original")
-		await connect2LBQ()
+		await connect2LBQ(res[1])
 		await queueRouter.bind(HEARDIR+":"+QUEUEPORT)
 		await syncDealer.bind(HEARDIR + ":" + SYNCPORT)
 		LBQDealerHandle()
@@ -242,8 +241,7 @@ async function inicialize(msg){
 			connect2LBQ(LBQDir)
 		})
 		
-		
-		await queueRouterHandle()
+		queueRouterHandle()
 		syncHandle()
 		syncDisconnect()
 		console.log("Queue Start as ORIGINAL")

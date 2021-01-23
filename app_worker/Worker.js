@@ -42,6 +42,11 @@ async function mainLoop(){
         setTimeout(mainLoop);
         return
       }
+	  if(!estimateTime[work[3].toString()]) {
+		index++
+		setTimeout(mainLoop);
+		return
+	  }
       req.send(["ESTIMATE TIME", estimateTime[work[3].toString()]])
       const status = await req.receive()
       if(status[0].toString() === "TIMEOUT REACHED"){
