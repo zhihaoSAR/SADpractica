@@ -1,4 +1,12 @@
 const { connect } = require("http2")
+
+var address,
+    ifaces = require('os').networkInterfaces();
+for (var dev in ifaces) {
+    ifaces[dev].filter((details) => details.family === 'IPv4' && details.internal === false ? address = details.address: undefined);
+}
+console.log("My Address: ", address);
+
 var zmq = require("zeromq")
 var sha1 = require('crypto').createHash('sha1')
 const syncDealer = new zmq.Dealer
@@ -10,25 +18,24 @@ const LBQPORT = 3021
 const LBQLIFECHECKPORT = 3022
 const QUEUEPORT = 3030
 const SYNCPORT = 3031
-const MASTERDIR = "tcp://"+"host.docker.internal"
+const MASTERDIR = "tcp://"+"172.28.0.2"
 const JOINDIR = MASTERDIR + ":"+JOINPORT
-const MYDIR = "tcp://" +"host.docker.internal"
-const HEARDIR = "tcp://0.0.0.0"
+const MYDIR = "tcp://" + address
+const HEARDIR = "tcp://" + address
 const ESTIMATETIME = 3000
 var state = "ORIGINAL"
 var pause = true
 var syncStart = false
 
-const resList = []
-const pendingList = []
-const workingDict = []
+var resList = []
+var pendingList = []
+var workingDict = []
 
 var LBQDir = null
 var SYNCDIR = null
 
 LBQDealer.immediate = true
 LBQDealer.reconnectInterval = -1
-//syncDealer.receiveTimeout = 3000
 syncDealer.reconnectInterval = -1
 
 async function sendRes(){
@@ -53,6 +60,7 @@ async function LBQDealerHandle(){
 }
 async function syncHandle() {
 	for await (msg of syncDealer){
+		console.log("Message of Sync: ", msg[0].toString())
 		const command = msg[0].toString()
 		if(command === "SYNC START")
 		{
@@ -85,9 +93,10 @@ async function syncHandle() {
 }
 async function queueRouterHandle(){
     for await (msg of queueRouter) {
+		/*
 		for(let i = 0; i < msg.length; ++i) {
-			console.log("queueRouterHandle ", msg[i].toString())
-		}
+			console.log("queueRouterHandle ", msg.toString())
+		}*/
 		const action = msg[2].toString()
 		if(state === "REPLICA"){
 			queueRouter.send([msg[0],"","NO WORK"])
@@ -145,6 +154,17 @@ async function queueRouterHandle(){
 			}
 			resList.push(msg)
 			setTimeout(sendRes)
+			continue
+		}
+		if(action === "NOT SUPPORT"){
+			if(!workingDict[msg[0]]){
+				queueRouter.send(msg[0],"","TIMEOUT REACHED")
+			}
+			clearTimeout(workingDict[msg[0]][1])
+			pendingList.unshift(workingDict[msg[0]][0])
+			delete workingDict[msg[0]]
+			queueRouter.send("OK")
+			continue
 		}
     }
 }
@@ -194,6 +214,7 @@ async function connect2LBQ(dir){
 function syncDisconnect(){
 	syncDealer.events.on("disconnect", async () =>{
 		if(state ==="ORIGINAL"){
+			console.log("replica down")
 			syncStart = false
 			await joinRequest.send(["QueueExit", "REPLICA", SYNCDIR, MYDIR])
 			joinRequest.receive()
@@ -201,23 +222,21 @@ function syncDisconnect(){
 		else{
 			state = "ORIGINAL"
 			await joinRequest.send(["BecomeOriginal", MYDIR,SYNCDIR,LBQDir])
-			joinRequest.receive()
+			//joinRequest.receive()
 			for(work of workingDict){
 				pendingList.unshift(work[0])
 			}
 			workingDict = {}
-			await queueRouter.bind(HEARDIR+":"+QUEUEPORT)
-
-			await syncDealer.bind(HEARDIR + ":" + SYNCPORT)
 			await connect2LBQ(LBQDir)
-			
+			await queueRouter.bind(HEARDIR+":"+QUEUEPORT)
+			await syncDealer.bind(HEARDIR + ":" + SYNCPORT)
+			syncStart = false
 			LBQDealerHandle()
 			LBQDealer.events.on("disconnect",() => {
 				pause = true
 				connect2LBQ(LBQDir)
 				console.log("Try 2 Connect2LBQ of ", LBQDir)
 			})
-			queueRouterHandle()
 		
 			console.log("Queue becomme ORIGINAL")
 		}
@@ -226,7 +245,8 @@ function syncDisconnect(){
 async function inicialize(msg){
 	res = JSON.parse(msg.toString())
 	state = res[0]
-	process.on('SIGINT',() => {
+	process.on('SIGTERM',() => {
+		console.log("i'm exiting")
 		joinRequest.send(["QueueExit", state, MYDIR, res[1]]).then(process.exit)
 	})
 	console.log(res)
@@ -251,20 +271,22 @@ async function inicialize(msg){
 		console.log("replica")
 		SYNCDIR = res[1]
 		try{
+			console.log("Send sync to: ",  SYNCDIR)
 			await syncDealer.connect(SYNCDIR + ":" + SYNCPORT)
 			await syncDealer.send("SYNC START")
 			
-			syncDealer.receiveTimeout = 3000
+			syncDealer.receiveTimeout = 5000
+			
 			let content = await syncDealer.receive()
 			syncDealer.receiveTimeout = -1
 			
-			if(content[0].toString() === "start")
-			{
+			
+			if(content[0].toString() === "start") {
 				const copy = JSON.parse(content[1].toString())
 				pendingList = copy[0]
 				workingDict = copy[1]
 				resList = copy[2]
-				LBQDir = LBQDir
+				LBQDir = copy[3]
 				syncStart = true
 			}
 			else{
@@ -273,7 +295,7 @@ async function inicialize(msg){
 			}
 		} catch(err) {
 			console.log("Error: ",err);
-			await joinRequest.send(["DeadQueue",MYDIR, SYNCDIR])
+			await joinRequest.send(["DeadQueue", MYDIR, SYNCDIR])
 			syncDealer.receiveTimeout = -1
 			return joinRequest.receive().then(inicialize)
 		}

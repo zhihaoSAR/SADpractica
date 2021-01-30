@@ -82,16 +82,21 @@ function LBQExit(msg) {
 function queueExit(msg) {
 	const queueDir = msg[4].toString()
 	const queueState = msg[3].toString()
+	const LBQorSyncDir = msg[5].toString()
 	if(queueState === "ORIGINAL")
 	{
 		removeOriginalQueue(queueDir)
 	}
 	else{
-		dDictionary.QUEUE[LBQorSyncDir] = null
-		dDictionary.numReplica--
+		if(dDictionary.QUEUE[LBQorSyncDir] !== "no replica") {
+			dDictionary.QUEUE[LBQorSyncDir] = "no replica"
+			console.log("queue exit")
+			dDictionary.numReplica--
+		}
 	}
 	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
 	console.log("Queue "+msg[4].toString() +" "+queueDir+" exit")
+	publisher.send(["QUEUELIST",JSON.stringify(dDictionary.QUEUE)])
 }
 function soliciteNewLBQ(msg){
 	const deadLBQ = msg[3].toString()
@@ -117,6 +122,7 @@ function deadQueue(msg){
 	console.log("try delete queue " + queueDir)
 	return queueJoin(msg)
 }
+
 function removeOriginalQueue(queueDir){
 	const lbqDir = dDictionary.ORIGINALQUEUE[queueDir]
 	if(lbqDir){
@@ -124,13 +130,14 @@ function removeOriginalQueue(queueDir){
 			dDictionary.LBQ[lbqDir]--
 	}
 	const replica = dDictionary.QUEUE[queueDir]
-	if(replica && replica !== "no replica"){
-		dDictionary.numReplica--
-	}
 	delete dDictionary.QUEUE[queueDir]
 	delete dDictionary.ORIGINALQUEUE[queueDir]
-	if(replica)
+	if(replica){
 		dDictionary.numOriginal--
+		if(replica !== "no replica")
+			dDictionary.numReplica--
+	}
+		
 }
 function becomeOriginal(msg){
 	const originalDir = msg[4].toString()
@@ -140,6 +147,7 @@ function becomeOriginal(msg){
 	dDictionary.ORIGINALQUEUE[queueDir] = lbqDir
 	dDictionary.LBQ[lbqDir]++
 	dDictionary.QUEUE[queueDir] = "no replica"
+	dDictionary.numOriginal++
 	fs.writeFileSync("dDictionary.json",JSON.stringify(dDictionary))
 	console.log(queueDir +  " become ORIGINAL")
 	return
@@ -169,10 +177,11 @@ async function mDictionaryHandle(){
 	}
 }
 
-
 //We could initiate
 if(fs.existsSync("dDictionary.json")){
 	dDictionary = JSON.parse(fs.readFileSync("dDictionary.json"))
+	console.log("file loaded")
+	console.log(dDictionary)
 }
 mDictionary.bind("tcp://"+masterDir+":"+masterPort)
 .then(() => {
@@ -183,7 +192,6 @@ mDictionary.bind("tcp://"+masterDir+":"+masterPort)
 	//console.log("IP master: ");
 	mDictionaryHandle()
 	setInterval(() => {
-		console.log("send list")
 		publisher.send(["QUEUELIST",JSON.stringify(dDictionary.QUEUE)])
 	}, UPDATE_LIST_TIME);
 });

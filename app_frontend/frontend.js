@@ -7,9 +7,10 @@ const subscripber = new zmq.Subscriber
 const JOINPORT = 3000
 const SUBPORT = 3001
 const LBQPORT = 3020
-const masterDir = "tcp://"+"host.docker.internal"
+const masterDir = "tcp://"+"172.28.0.2"
 const joinDir = masterDir + ":"+JOINPORT
 const subDir = masterDir + ":"+SUBPORT
+dealer.immediate = true
 //const myDir = "tcp://"+"127.0.0.1"+":3040"
 var clients = []
 
@@ -65,4 +66,5 @@ joinRequest.connect(joinDir)
 joinRequest.send(["FrontendJoin"])
 joinRequest.receive().then(inicialize)
   
+
 

@@ -4,8 +4,11 @@ services:
     master:
         build: ./app_master
         ports:
-            - "3000:3000"
-            - "3001:3001"
+            - "3000"
+            - "3001"
+        networks: 
+            client_Fr:
+                ipv4_address: 172.28.0.2
     frontend:
         build: ./app_frontend
         ports:
@@ -18,9 +21,11 @@ services:
         build: ./app_lbq
         ports:
             - "3000"
-            - "3020:3020"
-            - "3021:3021"
-            - "3022:3022"
+            - "3020"
+            - "3021"
+            - "3022"
+        networks: 
+            - client_Fr
         depends_on:
             - master
     queue:
@@ -28,6 +33,8 @@ services:
         ports:
             - "3030"
             - "3031"
+        networks: 
+            - client_Fr
         depends_on:
             - lbq
     worker:
@@ -36,12 +43,9 @@ services:
             - client_Fr
         depends_on:
             - queue
-    client:
-        build: ./app_client
-        depends_on:
-            - frontend
 networks:
     client_Fr:
         driver: bridge
-        external: true
-    
+        ipam:
+            config:
+                - subnet: 172.28.0.0/24
